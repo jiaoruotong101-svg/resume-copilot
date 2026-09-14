@@ -1,0 +1,46 @@
+.library {
+  font-family: Consolas, "Microsoft YaHei UI", monospace;
+  font-size: 13px;
+  min-height: 320px;
+  height: 48vh;
+  line-height: 1.85;
+}
+
+:root {color:#24352f;background:#f3f5f4;--green:#22644d;--muted:#566a61;--line:#dce4df;}
+main {padding:0 18px;}
+header {padding:20px 0 16px;}
+.version {background:#e5ece8;border-radius:20px;padding:3px 9px;color:#40594c;}
+nav {gap:6px;background:#e6ece8;border:0;border-radius:10px;padding:4px;}
+nav button {flex:1;border:0;border-radius:7px;padding:9px 4px;font-size:13px;}
+nav button.active {background:white;box-shadow:0 1px 3px #183d2514;color:var(--green);}
+.intro {border:0;background:transparent;margin:0;padding:24px 0 12px;}
+h1 {font-size:21px;}
+section:not(.intro) {background:#fff;border:1px solid var(--line);border-radius:12px;margin:12px 0;padding:18px;}
+.section-heading {flex-wrap:wrap;}
+.section-heading>span {font-size:12px;}
+textarea {border-color:#b4c4ba;border-radius:8px;}
+textarea:focus {border-color:var(--green);box-shadow:0 0 0 3px #22644d15;}
+.full {margin-top:12px;}
+.primary,.secondary {border-radius:8px;}
+.secondary {background:#f3f7f4;border-color:#c7d8ce;color:#285a43;}
+button:disabled {cursor:not-allowed;opacity:.48;}
+.save-bar {background:#f3f5f4;box-shadow:0 -8px 16px #f3f5f4;padding:12px 0;}
+dd {max-width:68%;overflow-wrap:anywhere;text-align:right;}
+.notice {background:#e7f1eb;border:1px solid #ccdfd2;color:#315640;}
+.notice.error {background:#fbeceb;border-color:#edc9c5;color:#8d3028;}
+.status {padding:2px 7px;border-radius:5px;background:#eef3f0;}
+.status.review,.status.unknown {color:#80521a;background:#fff2d9;}
+.status.ok,.status.filled {color:#1b6142;background:#e5f3e9;}
+.field-preview {border:0;padding:6px 0 0;}
+.field-preview summary {font-size:12px;color:var(--green);font-weight:500;}
+.field-preview p {white-space:pre-wrap;overflow-wrap:anywhere;background:#f4f7f5;padding:10px;border-radius:6px;}
+.filter-button {font-size:12px;border:1px solid var(--line);border-radius:20px;padding:4px 12px;min-height:32px;}
+.filter-button[aria-pressed=true] {color:white;background:var(--green);}
+@media(max-width:360px) {main{padding:0 12px;}section:not(.intro){padding:14px;}h1{font-size:19px;}}
+
+.preview-list {
+  margin: 12px 0 0;
+  padding-left: 20px;
+  color: var(--muted);
+  font-size: 12px;
+}

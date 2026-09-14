@@ -1,0 +1,70 @@
+import {chromium} from 'playwright';
+import {build} from 'esbuild';
+import {mkdtemp,mkdir,readFile,cp} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {resolve,join} from 'node:path';
+import assert from 'node:assert/strict';
+
+const userData=await mkdtemp(join(tmpdir(),'copilot-test-'));
+const dist=join(userData,'extension');
+await cp(resolve('dist'),dist,{recursive:true});
+const manifest=JSON.parse(await readFile(join(dist,'manifest.json'),'utf8'));
+assert.deepEqual(manifest.host_permissions,['https://career.huawei.com/*']);
+const fixture=await build({entryPoints:['tests/fixture.tsx'],bundle:true,write:false,format:'iife'});
+await mkdir('test-results',{recursive:true});
+const context=await chromium.launchPersistentContext(userData,{channel:'chromium',executablePath:process.env.COPILOT_BROWSER_PATH||undefined,headless:true,args:[`--disable-extensions-except=${dist}`,`--load-extension=${dist}`]});
+const errors=[];
+context.on('page',p=>p.on('pageerror',e=>errors.push(e.message)));
+try {
+  let [worker]=context.serviceWorkers();
+  worker??=await context.waitForEvent('serviceworker');
+  const id=new URL(worker.url()).host;
+  // Fulfilled locally: no candidate data is sent to Huawei during tests.
+  await context.route('https://career.huawei.com/**',route=>route.fulfill({contentType:'text/html',body:`<!doctype html><html><meta charset="utf-8"><title>模拟招聘页面</title><div id="root"></div><script>${fixture.outputFiles[0].text}</script></html>`}));
+  const site=await context.newPage();await site.goto('https://career.huawei.com/cn/test');
+  const panel=await context.newPage();await panel.goto(`chrome-extension://${id}/index.html`);
+  await panel.getByRole('button',{name:'保存简历内容库',exact:true}).waitFor();
+  await panel.setViewportSize({width:420,height:900});
+  await panel.screenshot({path:'test-results/panel-empty.png',fullPage:true});
+  const text='【基本信息】\n姓名：测试候选人\n手机：13800138000\n邮箱：test@example.com\n【教育经历 1】\n学校：甲大学\n专业：计算机\n学历：本科\n毕业时间：2027-06\n【教育经历 2】\n学校：乙大学\n专业：数学\n学历：硕士';
+  await panel.getByLabel('内容库',{exact:true}).fill(text);
+  await panel.getByRole('button',{name:'解析并预览'}).click();
+  await panel.getByRole('button',{name:'保存简历内容库',exact:true}).click();
+  await panel.getByRole('status').filter({hasText:'已保存在本机'}).waitFor();
+  await panel.reload();
+  await panel.getByRole('button',{name:'编辑内容库',exact:true}).click();
+  assert.match(await panel.locator('textarea.library').inputValue(),/测试候选人/);
+  assert.match(await panel.locator('textarea.library').inputValue(),/乙大学/);
+  await panel.screenshot({path:'test-results/panel-profile.png',fullPage:true});
+  await panel.setViewportSize({width:320,height:800});
+  assert.equal(await panel.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+  await panel.screenshot({path:'test-results/panel-narrow.png',fullPage:true});
+  const profile=await panel.evaluate(async()=> (await chrome.storage.local.get('resumeProfileV1')).resumeProfileV1);
+  const result=await panel.evaluate(async p=>{
+    const tabs=await chrome.tabs.query({});const target=tabs.find(t=>t.url?.startsWith('https://career.huawei.com/'));
+    await chrome.scripting.executeScript({target:{tabId:target.id},files:['content.js']});
+    return (await chrome.tabs.sendMessage(target.id,{type:'COPILOT_RUN',fill:true,profile:p})).result;
+  },profile);
+  assert.equal(await site.getByTestId('react-value').textContent(),'测试候选人');
+  assert.equal(await site.getByLabel('学校',{exact:true}).nth(1).inputValue(),'乙大学');
+  assert.equal(await site.locator('select').inputValue(),'b');
+  assert.equal(await site.getByLabel('邮箱',{exact:true}).inputValue(),'existing@example.com');
+  assert.equal(await site.getByLabel('身份证号').inputValue(),'');
+  assert.equal(await site.getByLabel('同意隐私声明').isChecked(),false);
+  assert.equal(await site.evaluate(()=>document.body.dataset.submitted),undefined);
+  assert(result.fields.some(f=>f.status==='review'));
+  const check=await panel.evaluate(async p=>{
+    const tabs=await chrome.tabs.query({});const target=tabs.find(t=>t.url?.startsWith('https://career.huawei.com/'));
+    return (await chrome.tabs.sendMessage(target.id,{type:'COPILOT_RUN',fill:false,profile:p})).result;
+  },profile);
+  assert(check.fields.some(f=>f.status==='ok'));
+  await panel.getByRole('button',{name:'填写助手',exact:true}).click();
+  await site.bringToFront();
+  await panel.evaluate(()=>Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='扫描并匹配当前页面').click());
+  await panel.getByRole('status').filter({hasText:'页面扫描完成'}).waitFor();
+  assert(await panel.locator('.results li').count()>0);
+  await panel.setViewportSize({width:420,height:900});
+  await panel.screenshot({path:'test-results/panel-results.png',fullPage:true});
+  assert.deepEqual(errors,[]);
+  console.log('PASS: unpacked MV3 loads; text library persists; 420/320 px UI; Shadow DOM messaging; React controlled input; education groups; native select; sensitive fields; no submit; scan-before-fill flow.');
+} finally {await context.close();}
